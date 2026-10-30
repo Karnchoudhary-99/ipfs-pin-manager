@@ -10,7 +10,7 @@ against a node's pinset, and GC of orphaned blocks — from the command line.
 - [x] Pin registry (CID validation, pin/unpin, reasons, persistence)
 - [x] Verification against a node pinset (ok/missing/extra)
 - [x] Garbage collection (orphan detection, dry-run plan + review script)
-- [ ] Self-review checklist, then public
+- [x] Self-review checklist, then public
 
 ## Quick start
 
