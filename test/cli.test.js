@@ -60,6 +60,19 @@ test("CLI rejects invalid CIDs, missing reasons and unknown commands", async () 
   assert.equal((await runMain([])).code, 1);
 });
 
+test("CLI stats reports count, size and pins by reason", async () => {
+  const store = await storePath();
+  await runMain(["--store", store, "pin", A, "--reason", "backup", "--size", "100"]);
+  await runMain(["--store", store, "pin", B, "--reason", "website"]);
+  const r = await runMain(["--store", store, "stats"]);
+  assert.equal(r.code, 0);
+  const stats = JSON.parse(r.out.join("\n"));
+  assert.equal(stats.pins, 2);
+  assert.equal(stats.totalSizeBytes, 100);
+  assert.equal(stats.sizeComplete, false);
+  assert.deepEqual(stats.byReason, { backup: 1, website: 1 });
+});
+
 test("CLI works as a real subprocess (node src/cli.js)", async () => {
   const store = await storePath();
   const { stdout } = await run("node", ["src/cli.js", "--store", store, "pin", A, "--reason", "backup"]);
