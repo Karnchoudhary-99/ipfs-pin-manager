@@ -1,0 +1,11 @@
+{
+  "name": "ipfs-pin-manager",
+  "version": "0.1.0",
+  "description": "IPFS pin manager: track, verify and GC pinned content across nodes",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "start": "node src/cli.js --help"
+  },
+  "license": "MIT"
+}
