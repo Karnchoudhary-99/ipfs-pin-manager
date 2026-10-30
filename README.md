@@ -8,8 +8,8 @@ against a node's pinset, and GC of orphaned blocks — from the command line.
 
 - [x] Project scaffold (package.json, pin module layout, smoke test, CI, README)
 - [x] Pin registry (CID validation, pin/unpin, reasons, persistence)
-- [ ] Verification against a node pinset (missing/extra/dangling pins)
-- [ ] Garbage collection (orphan detection, dry-run + sweep)
+- [x] Verification against a node pinset (ok/missing/extra)
+- [x] Garbage collection (orphan detection, dry-run plan + review script)
 - [ ] Self-review checklist, then public
 
 ## Quick start
@@ -40,6 +40,41 @@ node src/cli.js --store ./pins.json unpin QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79
 
 `stats` reports pin count, total size (with `sizeComplete: false` when
 any pin's size is unknown), and pins grouped by reason.
+
+## Verification and garbage collection
+
+The manager never talks to a node itself — you hand it the node's
+pinset, so the workflow stays honest about what it can and cannot do:
+
+```sh
+ipfs pin ls > pinset.txt   # on the node, or: ipfs pin ls --quiet > pinset.txt
+node src/cli.js --store ./pins.json verify --pinset pinset.txt
+```
+
+The report splits pins into three buckets: `ok` (registry + node agree),
+`missing` (in the registry but lost from the node — re-pin it), and
+`extra` (on the node but untracked by the registry — the GC candidates).
+`verify` exits 0 even when drift is found; the report is the result,
+not an error.
+
+`gc` plans the sweep and never unpins anything on its own:
+
+```sh
+node src/cli.js --store ./pins.json gc --pinset pinset.txt
+node src/cli.js --store ./pins.json gc --pinset pinset.txt --sizes sizes.json --script sweep.sh
+# review sweep.sh, then run it against the node yourself
+```
+
+`--sizes` is an optional JSON map of CID to bytes (e.g. from
+`ipfs dag stat`); without a size for every candidate, the reclaimable
+total is reported with `sizeComplete: false` rather than silently
+partial. `--prune-dangling` is the one local mutation: it drops registry
+entries for content the node no longer pins, and saves the store — use
+it only once you have decided those pins should not be re-pinned.
+
+```sh
+node examples/verify-gc.mjs   # same flow in-process, no node needed
+```
 
 ## License
 

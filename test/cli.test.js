@@ -80,3 +80,52 @@ test("CLI works as a real subprocess (node src/cli.js)", async () => {
   const { stdout: list } = await run("node", ["src/cli.js", "--store", store, "list"]);
   assert.match(list, /backup/);
 });
+
+const C_CLI = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdH";
+
+async function writeTmpFile(dir, name, content) {
+  const { writeFile } = await import("node:fs/promises");
+  const path = join(dir, name);
+  await writeFile(path, content, "utf8");
+  return path;
+}
+
+test("CLI verify reports ok/missing/extra and rejects malformed pinsets", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ipm-verify-"));
+  const store = join(dir, "pins.json");
+  await runMain(["--store", store, "pin", A, "--reason", "backup"]);
+  await runMain(["--store", store, "pin", B, "--reason", "website"]);
+  const pinset = await writeTmpFile(dir, "pinset.txt", `${A} recursive\n${C_CLI} direct\n`);
+  const r = await runMain(["--store", store, "verify", "--pinset", pinset]);
+  assert.equal(r.code, 0);
+  const report = JSON.parse(r.out.join("\n"));
+  assert.deepEqual(report.ok, [A]);
+  assert.deepEqual(report.missing, [B]);
+  assert.deepEqual(report.extra, [C_CLI]);
+  const bad = await writeTmpFile(dir, "bad.txt", `${A}\nnot-a-cid\n`);
+  assert.equal((await runMain(["--store", store, "verify", "--pinset", bad])).code, 1);
+  assert.equal((await runMain(["--store", store, "verify"])).code, 1);
+});
+
+test("CLI gc plans orphans, writes a review script, prunes dangling pins", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ipm-gc-"));
+  const store = join(dir, "pins.json");
+  await runMain(["--store", store, "pin", A, "--reason", "backup"]);
+  await runMain(["--store", store, "pin", B, "--reason", "website"]);
+  const pinset = await writeTmpFile(dir, "pinset.txt", `${A} recursive\n${C_CLI} direct\n`);
+  const sizes = await writeTmpFile(dir, "sizes.json", JSON.stringify({ [C_CLI]: 4096 }));
+  const script = join(dir, "sweep.sh");
+  const r = await runMain(["--store", store, "gc", "--pinset", pinset, "--sizes", sizes, "--script", script]);
+  assert.equal(r.code, 0);
+  const plan = JSON.parse(r.out.filter((l) => !l.startsWith("wrote GC script")).join("\n"));
+  assert.deepEqual(plan.candidates, [C_CLI]);
+  assert.equal(plan.reclaimableBytes, 4096);
+  assert.equal(plan.sizeComplete, true);
+  const { readFile } = await import("node:fs/promises");
+  assert.match(await readFile(script, "utf8"), new RegExp(`ipfs pin rm ${C_CLI}`));
+  // Prune: B is missing from the node, so it leaves the registry; A stays.
+  const r2 = await runMain(["--store", store, "gc", "--pinset", pinset, "--prune-dangling"]);
+  assert.deepEqual(JSON.parse(r2.out.join("\n")).prunedDangling, [B]);
+  assert.equal((await runMain(["--store", store, "show", B])).code, 1);
+  assert.equal((await runMain(["--store", store, "show", A])).code, 0);
+});
