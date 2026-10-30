@@ -5,6 +5,7 @@
 //   unpin <cid>
 //   list [--reason <r>] [--tag <t>]
 //   show <cid>
+//   stats
 // Exit codes: 0 ok, 1 usage/validation error, 2 store error.
 
 import { loadStore, saveStore } from "./store.js";
@@ -36,7 +37,8 @@ Commands:
   pin <cid> --reason <text> [--size <bytes>] [--tag <t> ...]
   unpin <cid>
   list [--reason <r>] [--tag <t>]
-  show <cid>`;
+  show <cid>
+  stats`;
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -80,6 +82,14 @@ export async function main(argv = process.argv.slice(2)) {
     if (args.command === "list") {
       const records = registry.list({ reason: args.flags.reason, tag: (args.flags.tag ?? [])[0] });
       for (const record of records) console.log(JSON.stringify(record));
+      return 0;
+    }
+    if (args.command === "stats") {
+      const records = registry.list();
+      const byReason = {};
+      for (const record of records) byReason[record.reason] = (byReason[record.reason] ?? 0) + 1;
+      const { bytes, complete } = registry.totalSize();
+      console.log(JSON.stringify({ pins: records.length, totalSizeBytes: bytes, sizeComplete: complete, byReason }, null, 2));
       return 0;
     }
     if (args.command === "show") {
